@@ -1,98 +1,245 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { CompanyList } from '@/components/company/company-list';
+import { ActiveFiltersBar } from '@/components/filters/active-filters-bar';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SearchBar } from '@/components/ui/search-bar';
+import { Shadows, Spacing } from '@/constants/layout';
+import { useSearchContext } from '@/context/search-context';
+import { useCompanySearch } from '@/hooks/use-company-search';
+import { useListAnimations } from '@/hooks/use-list-animations';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import * as Haptics from 'expo-haptics';
+import { useCallback, useRef } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function HomeScreen() {
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+export default function SearchScreen() {
+  const insets = useSafeAreaInsets();
+  const { state, dispatch, openFilterSheet } = useSearchContext();
+  const {
+    results,
+    totalCount,
+    resultCount,
+    isSearching,
+    hasActiveSearch,
+    hasActiveFilters,
+  } = useCompanySearch();
+  const listRef = useRef<FlatList>(null);
+  const bgColor = useThemeColor({}, 'background');
+  const accentColor = useThemeColor({}, 'accent');
+  const borderColor = useThemeColor({}, 'border');
+
+  const {
+    handleScroll,
+    headerRowAnimatedStyle,
+    toolbarAnimatedStyle,
+    scrollTopAnimatedStyle,
+    filterPillAnimatedStyle,
+    filterPillTextAnimatedStyle,
+  } = useListAnimations(results.length);
+
+  const handleQueryChange = useCallback(
+    (text: string) => dispatch({ type: 'SET_QUERY', payload: text }),
+    [dispatch]
+  );
+
+
+  const openFilters = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    openFilterSheet();
+  }, [openFilterSheet]);
+
+  const handleClearAll = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    dispatch({ type: 'CLEAR_ALL' });
+  }, [dispatch]);
+
+  const handleScrollToTop = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  const isFiltered = hasActiveSearch || hasActiveFilters;
+  const activeFilterCount =
+    state.filters.industries.length +
+    state.filters.sizes.length +
+    (state.filters.companyType ? 1 : 0);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
+      {/* Fixed header above the list */}
+      <View
+        style={[
+          styles.headerContainer,
+          { paddingTop: insets.top, backgroundColor: bgColor, borderBottomColor: borderColor },
+        ]}
+      >
+        {/* Title row: collapses on scroll down */}
+        <Animated.View style={[styles.titleRow, headerRowAnimatedStyle]}>
+          <ThemedText type="title" style={styles.title}>
+            Search
+          </ThemedText>
+          <View style={styles.countRow}>
+            <ThemedText style={styles.count} lightColor="#9BA1A6" darkColor="#687076">
+              {isFiltered
+                ? `${resultCount} result${resultCount !== 1 ? 's' : ''}`
+                : `${totalCount} companies`}
+            </ThemedText>
+            {isFiltered && (
+              <Pressable onPress={handleClearAll} hitSlop={8}>
+                <ThemedText style={[styles.clearAll, { color: accentColor }]}>
+                  Clear
+                </ThemedText>
+              </Pressable>
+            )}
+          </View>
+        </Animated.View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {/* Search + chips row: collapses on scroll down */}
+        <Animated.View style={toolbarAnimatedStyle}>
+          <View style={styles.toolbarInner}>
+            <SearchBar value={state.query} onChangeText={handleQueryChange} showHint={false} />
+            <ActiveFiltersBar />
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* Scrollable list */}
+      <View style={styles.listContainer}>
+        <CompanyList
+          companies={results}
+          isSearching={isSearching}
+          listRef={listRef}
+          onScroll={handleScroll}
+        />
+      </View>
+
+      {/* Floating Actions: scroll-to-top (left) + filter pill (right) */}
+      <Animated.View
+        style={[styles.fab, styles.fabLeft, { bottom: insets.bottom + 30 }, scrollTopAnimatedStyle]}
+      >
+        <Pressable
+          style={[styles.fabButton, { backgroundColor: accentColor }]}
+          onPress={handleScrollToTop}
+        >
+          <IconSymbol name="arrow.up" size={22} color="#FFFFFF" />
+        </Pressable>
+      </Animated.View>
+
+      <View style={[styles.fab, styles.fabRight, { bottom: insets.bottom + 30 }]}>
+        <AnimatedPressable
+          style={[styles.filterPill, { backgroundColor: accentColor }, filterPillAnimatedStyle]}
+          onPress={openFilters}
+        >
+          <Animated.Text
+            style={[styles.filterPillText, filterPillTextAnimatedStyle]}
+            numberOfLines={1}
+          >
+            Filters
+          </Animated.Text>
+          <View style={styles.filterPillIconContainer}>
+            <IconSymbol name="line.3.horizontal.decrease" size={20} color="#FFFFFF" />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterPillBadge}>
+                <Animated.Text style={styles.filterPillBadgeText}>
+                  {activeFilterCount}
+                </Animated.Text>
+              </View>
+            )}
+          </View>
+        </AnimatedPressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  headerContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    gap: Spacing.sm,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  title: {
+    fontSize: 24,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  count: {
+    fontSize: 13,
+  },
+  clearAll: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  toolbarInner: {
+    gap: Spacing.sm,
+  },
+  listContainer: {
+    flex: 1,
+  },
+  fab: {
     position: 'absolute',
+  },
+  fabLeft: {
+    left: 20,
+  },
+  fabRight: {
+    right: 20,
+  },
+  fabButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.lg,
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: 26,
+    overflow: 'hidden',
+    ...Shadows.lg,
+  },
+  filterPillText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  filterPillIconContainer: {
+    position: 'relative',
+  },
+  filterPillBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterPillBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
